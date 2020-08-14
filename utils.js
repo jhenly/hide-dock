@@ -4,6 +4,30 @@ const GLib = imports.gi.GLib;
 
 const Me = imports.misc.extensionUtils.getCurrentExtension();
 
+// extends GlobalSignalsHandler class
+var HijackSignalsHandler;
+
+/** 
+ * Grabs Ubuntu Dock's GlobalSignalsHandler class and creates
+ * HijackSignalsHandler class by extending it.
+ * 
+ * @param udock - The enabled Ubuntu Dock extension instance
+ */
+function onUbuntuDockEnabled(udock) {
+	HijackSignalsHandler = class HideDock_HijackSignalsHandler
+		extends udock.imports.utils.GlobalSignalsHandler {
+			// _create(item) { super(item); }
+			
+			// override to protect from disconnecting from null or undefined
+			_remove(item) {
+				if(!item[0] || !item[1]) 
+					return;
+					
+				item[0].disconnect(item[1]);
+			}
+	};
+}
+
 /**
  * @return The current date and time in the following format
  * 		   '[M]M/[D]D/YYYY [h]h:[m]m:[s]s[am/pm]'
