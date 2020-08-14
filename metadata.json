@@ -1,0 +1,8 @@
+{
+	"uuid": "hide-dock@jhenly",
+	"name": "Hide Dock",
+	"description": "Allows the dock to be completly hidden unless moused over or activities is clicked.",
+	"url": "https://github.com/JonathanHenly/hide-dock",
+	"shell-version": ["3.18", "3.20", "3.22", "3.24", "3.26", "3.28", "3.30", "3.32"],
+	"version": 1
+}
