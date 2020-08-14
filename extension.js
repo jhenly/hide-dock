@@ -93,6 +93,9 @@ function onExtensionStateChanged() {
 		
 		let udock = Main.extensionManager.lookup(UBUNTU_DOCK_UUID);
 		
+		// give udock to Utils first, to extend GlobalSignalsHandler class
+		Utils.onUbuntuDockEnabled(udock);
+		
 		onUbuntuDockEnabled(udock);
 	} else if(!ubuntuDockEnabled && _ubuntuDockEnabled){
 		_ubuntuDockEnabled = false;
