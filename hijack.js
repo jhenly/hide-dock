@@ -344,6 +344,11 @@ const DOCK_MANAGER_SIGNALS_LABEL = "dock-manager";
 var HijackerManager = class HideDock_HijackerManager {
 
     constructor(udock) {
+        if (Me.imports.extension._hijackerManager)
+            throw new Error('hide-dock has already been initialized');
+
+        Me.imports.extension._hijackerManager = this;
+
         this._udock = udock;
 
         /*var State = {HIDDEN:0, SHOWING:1, SHOWN:2, HIDING:3};*/
@@ -353,10 +358,14 @@ var HijackerManager = class HideDock_HijackerManager {
 
         this._dockmgr = this._udock.stateObj.dockManager;
 
-        this._signalsHandler = new Hijack.HijackSignalsHandler();
+        this._signalsHandler = new Utils.HijackSignalsHandler();
         this._addSettingsSignals();
 
         this._addDockManagerSignals();
+    }
+
+    static getDefault() {
+        return Me.imports.extension._hijackerManager;
     }
 
     _addSettingsSignals() {
