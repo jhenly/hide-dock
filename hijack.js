@@ -60,7 +60,7 @@ var Hijacker = class HideDock_Hijacker {
 		
 		//this.connect('destroy', this._onDestroy.bind(this));
 		
-		this._signalsHandler = new udock.imports.utils.GlobalSignalsHandler();
+		this._signalsHandler = new Utils.HijackSignalsHandler(); //udock.imports.utils.GlobalSignalsHandler();
 		this._addSignals();
 		
 		// variables used to try and hide initially shown dock
@@ -145,13 +145,18 @@ var Hijacker = class HideDock_Hijacker {
 											 this._dockHoverChanged.bind(this));
 	}
 	
-	_resetAfterDockChange() {
-		this._signalsHandler.removeWithLable(DOCK_SIGNALS_LABEL);
+	_resetOnDockChange() {
+		this._signalsHandler.removeWithLabel(DOCK_SIGNALS_LABEL);
 		
 		if(this._dockHoverBoxId != 0) {
-			this._dockHoverBox.disconnect(this._dockHoverBoxId);
-			this._dockHoverBoxId = 0;
-			this._dockHoverBox = null;
+			if(this._dockHoverBox) {
+				this._LOG("  _dockHoverBox is not NULL");
+				this._dockHoverBox.disconnect(this._dockHoverBoxId);
+				this._dockHoverBox = null;
+			} else {
+				this._LOG("  _dockHoverBox IS NULL");
+			}
+			this._dockHoverBoxId = 0;			
 		}
 		
 		this._dock = this._dockmgr._allDocks[0];
@@ -281,11 +286,13 @@ var Hijacker = class HideDock_Hijacker {
 			if(this._oshow || this._dhover)
 				return;
 			
-			// hide dock when overview is not showing and mouse is not hovering
-			if(!this._oshow && !this._dhover && (this._oshowold || this._woverlap)) {
+			// hide dock without delay when leaving overview, otherwise it
+			// looks weird
+			if(!this._oshow && !this._dhover && (this._oshowold)) {
 				this._oshowold = false;
 				this._woverlap = false;
-		
+				
+				// use _hideDockNoDelay, _hide has an implicit delay
 				this._hideDockNoDelay();
 				return;
 			}
@@ -332,6 +339,8 @@ var Hijacker = class HideDock_Hijacker {
 	}
 };
 
+const DOCK_MANAGER_SIGNALS_LABEL = "dock-manager";
+
 var HijackerManager = class HideDock_HijackerManager {
 
     constructor(udock) {
@@ -344,11 +353,13 @@ var HijackerManager = class HideDock_HijackerManager {
 		
 		this._dockmgr = this._udock.stateObj.dockManager;
 		
-		this._signalsHandler = new udock.imports.utils.GlobalSignalsHandler();
-		this._addSignals();
+		this._signalsHandler = new Hijack.HijackSignalsHandler();
+		this._addSettingsSignals();
+		
+		this._addDockManagerSignals();
 	}
 	
-	_addSignals() {
+	_addSettingsSignals() {
 		let settings = this._dockmgr._settings;
         this._signalsHandler.add([
             settings,
@@ -445,6 +456,14 @@ var HijackerManager = class HideDock_HijackerManager {
         ]);
 	}
 	
+	_addDockManagerSignals() {
+		this._signalsHandler.addWithLabel(DOCK_MANAGER_SIGNALS_LABEL, [
+            this._dockmgr,
+            'toggled',
+            () => { this._LOG("toggled"); }
+        ],);
+	}
+	
 	_onDockFixed() {
 		this._LOG("changed::dock-fixed");
 	}
@@ -455,33 +474,9 @@ var HijackerManager = class HideDock_HijackerManager {
 	
 	_onDockPositionChanged() {
 		this._LOG("changed::dock-position");
-		
+
 		if(this._hijacker) {
-			this._hijacker.destroy();
-			this._hijacker = null;
-			this._hijacker = new Hijacker(this._udock);
-		}
-		
-		if(this._udock) {
-			this._LOG("_udock is NOT NULL");
-			if(this._dockmgr) {
-				this._LOG("_dockmgr is NOT NULL");
-				if(this._dockmgr._allDocks) {
-					this._LOG("_allDocks is NOT NULL");
-					if(this._dockmgr._allDocks[0]) {
-						this._LOG("_allDocks[0] is NOT NULL");
-						this._LOG("_allDocks length = " + this._dockmgr._allDocks.length);
-					} else {
-						this._LOG("_allDocks[0] is NULL");
-					}
-				} else {
-					this._LOG("_allDocks is NULL");
-				}
-			} else {
-				this._LOG("_dockmgr is NULL");
-			}
-		} else {
-			this._LOG("_udock is NULL");
+			this._hijacker._resetOnDockChange();
 		}
 	}
 	
