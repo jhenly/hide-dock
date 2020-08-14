@@ -14,18 +14,18 @@ var HijackSignalsHandler;
  * @param udock - The enabled Ubuntu Dock extension instance
  */
 function onUbuntuDockEnabled(udock) {
-	HijackSignalsHandler = class HideDock_HijackSignalsHandler
-		extends udock.imports.utils.GlobalSignalsHandler {
-			// _create(item) { super(item); }
-			
-			// override to protect from disconnecting from null or undefined
-			_remove(item) {
-				if(!item[0] || !item[1]) 
-					return;
-					
-				item[0].disconnect(item[1]);
-			}
-	};
+    HijackSignalsHandler = class HideDock_HijackSignalsHandler
+        extends udock.imports.utils.GlobalSignalsHandler {
+        // _create(item) { super(item); }
+
+        // override to protect from disconnecting from null or undefined
+        _remove(item) {
+            if (!item[0] || !item[1])
+                return;
+
+            item[0].disconnect(item[1]);
+        }
+    };
 }
 
 /**
@@ -33,23 +33,23 @@ function onUbuntuDockEnabled(udock) {
  * 		   '[M]M/[D]D/YYYY [h]h:[m]m:[s]s[am/pm]'
  */
 function fullTimestamp() {
-	return `${mdyTimestamp()} ${hmsTimestamp()}`; 
+    return `${mdyTimestamp()} ${hmsTimestamp()}`;
 }
 
 /**
  * @return The current date in the following format '[M]M/[D]D/YYYY'
  */
 function mdyTimestamp() {
-	return (new Date()).toLocaleDateString();
+    return (new Date()).toLocaleDateString();
 }
 
 /**
  * @return The current time in the following format '[h]h:[m]m:[s]s[am/pm]'
  */
 function hmsTimestamp() {
-	let [t, ampm] = (new Date()).toLocaleTimeString().split(" ");
-	
-	return `${t}${ampm.toLocaleLowerCase()}`;
+    let [t, ampm] = (new Date()).toLocaleTimeString().split(" ");
+
+    return `${t}${ampm.toLocaleLowerCase()}`;
 }
 
 /**
@@ -91,7 +91,7 @@ Promise.timeoutSeconds = function(priority = GLib.PRIORITY_DEFAULT, interval = 1
  *                            the timeout should end.
  * @param {number} interval - Milliseconds to timeout.
  */
-async function asyncTimeoutPreCall(callee, interval=200) {
+async function asyncTimeoutPreCall(callee, interval = 200) {
     try {
         do {
             try {
@@ -99,7 +99,7 @@ async function asyncTimeoutPreCall(callee, interval=200) {
             } catch (e) {
                 throw e;
             }
-        } while(callee.call());
+        } while (callee.call());
     } catch (e) {
         logError(e);
     }
@@ -115,9 +115,9 @@ async function asyncTimeoutPreCall(callee, interval=200) {
  *                            the timeout should end.
  * @param {number} interval - Milliseconds to timeout.
  */
-async function asyncTimeoutPostCall(callee, interval=200) {
+async function asyncTimeoutPostCall(callee, interval = 200) {
     try {
-        while(callee.call()) {
+        while (callee.call()) {
             try {
                 await Promise.timeout(GLib.PRIORITY_DEFAULT, interval);
             } catch (e) {
