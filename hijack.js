@@ -171,6 +171,10 @@ var Hijacker = class HideDock_Hijacker {
         this._addDockSignals();
 
         this._waitingForToggle = false;
+
+        Utils.asyncTimeoutPostCall(this._hideInitialDock.bind(this),
+            INITIAL_DOCK_STATE_TIMEOUT)
+            .then(res => this._LOG(`Successfully hid the dock.`));
     }
 
     _hideInitialDock() {
@@ -300,7 +304,9 @@ var Hijacker = class HideDock_Hijacker {
 
             // hide dock without delay when leaving overview, otherwise it
             // looks weird
-            if (!this._oshow && !this._dhover && (this._oshowold)) {
+            if (!this._oshow && !this._dhover &&
+                (this._oshowold || (this._woverlap && !this._dhover))) {
+	
                 this._oshowold = false;
                 this._woverlap = false;
 
