@@ -76,7 +76,7 @@ function enable() {
     LOG("enabling");
 
 
-    // Listen to enabled extensions for Ubuntu Dock events
+    // listen to enabled extensions for Ubuntu Dock events
     _extensionlistenerId = Main.extensionManager.connect('extension-state-changed',
         onExtensionStateChanged);
 }
@@ -104,7 +104,7 @@ function onExtensionStateChanged() {
 
 }
 
-let _hijackerManager;
+var _hijackerManager;
 
 function onUbuntuDockEnabled(udock) {
     LOG("Ubuntu Dock ENABLED");
