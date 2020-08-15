@@ -66,8 +66,10 @@ var Hijacker = class HideDock_Hijacker {
         // variables used to try and hide initially shown dock
         //this._checkInitialDockStateId = 0;
         this._checkInitialDockStateCount = 0;
+
         this._checkInitialDockShownCount = 0;
 
+        this._waitingForToggle = false;
 
         Utils.asyncTimeoutPostCall(this._hideInitialDock.bind(this),
             INITIAL_DOCK_STATE_TIMEOUT)
@@ -145,7 +147,8 @@ var Hijacker = class HideDock_Hijacker {
             this._dockHoverChanged.bind(this));
     }
 
-    _resetOnDockChange() {
+    _prepForDockManagerToggle() {
+        this._waitingForToggle = true;
         this._signalsHandler.removeWithLabel(DOCK_SIGNALS_LABEL);
 
         if (this._dockHoverBoxId != 0) {
@@ -159,10 +162,15 @@ var Hijacker = class HideDock_Hijacker {
             this._dockHoverBoxId = 0;
         }
 
+    }
+
+    _onDockManagerToggle() {
         this._dock = this._dockmgr._allDocks[0];
         this._dockHoverBox = this._dock._box;
 
         this._addDockSignals();
+
+        this._waitingForToggle = false;
     }
 
     _hideInitialDock() {
@@ -279,6 +287,10 @@ var Hijacker = class HideDock_Hijacker {
     }
 
     _updateDockVisibility() {
+        // don't update dock visibility while waiting for Dock Manager toggle
+        if (this._waitingForToggle)
+            return;
+
         let dstate = this._dock.getDockState();
 
         if (dstate == State.SHOWN || dstate == State.SHOWING) {
@@ -469,7 +481,10 @@ var HijackerManager = class HideDock_HijackerManager {
         this._signalsHandler.addWithLabel(DOCK_MANAGER_SIGNALS_LABEL, [
             this._dockmgr,
             'toggled',
-            () => { this._LOG("toggled"); }
+            () => {
+                this._LOG("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!toggled");
+                this._hijacker._onDockManagerToggle();
+            }
         ]);
     }
 
@@ -485,7 +500,7 @@ var HijackerManager = class HideDock_HijackerManager {
         this._LOG("changed::dock-position");
 
         if (this._hijacker) {
-            this._hijacker._resetOnDockChange();
+            this._hijacker._prepForDockManagerToggle();
         }
     }
 
