@@ -66,8 +66,8 @@ var Hijacker = class HideDock_Hijacker {
         // variables used to try and hide initially shown dock
         //this._checkInitialDockStateId = 0;
         this._checkInitialDockStateCount = 0;
-
         this._checkInitialDockShownCount = 0;
+        this._stopCheckingInitialDock = false;
 
         this._waitingForToggle = false;
 
@@ -143,6 +143,9 @@ var Hijacker = class HideDock_Hijacker {
     }
 
     _prepForDockManagerToggle() {
+	    if(this._waitingForToggle)
+            return;
+        
         this._waitingForToggle = true;
         this._signalsHandler.removeWithLabel(DOCK_SIGNALS_LABEL);
 
@@ -166,13 +169,22 @@ var Hijacker = class HideDock_Hijacker {
         this._addDockSignals();
 
         this._waitingForToggle = false;
-
-        Utils.asyncTimeoutPostCall(this._hideInitialDock.bind(this),
-            INITIAL_DOCK_STATE_TIMEOUT)
-            .then(res => this._LOG(`Successfully hid the dock.`));
+        
+        if(!this._stopCheckingInitialDock) {
+            Utils.asyncTimeoutPostCall(this._hideInitialDock.bind(this),
+                INITIAL_DOCK_STATE_TIMEOUT)
+                .then(res => this._LOG(`Successfully hid the dock.`));
+        }
     }
 
     _hideInitialDock() {
+	    // the only time the following happens is when this extension or udock
+        // is disabled while checking for intial dock state, we need to stop
+        // making timeouts as soon as possible
+	    if(this._stopCheckingInitialDock)
+            return false;
+        
+        // 
         let check = this._initialDockCheck();
 
         if (check == InitialDockCheck.RETRY) {
@@ -506,6 +518,9 @@ var HijackerManager = class HideDock_HijackerManager {
     }
 
     destroy() {
+	    // notify if disabled while checking initial dock state
+        this._stopCheckingInitialDock = true;
+        
         this._signalsHandler.destroy();
 
         if (this._hijacker) {
