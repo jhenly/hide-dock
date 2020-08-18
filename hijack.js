@@ -85,12 +85,7 @@ var Hijacker = class HideDock_Hijacker {
             this._dockHoverBox.disconnect(this._dockHoverBoxId);
             this._dockHoverBox = null;
         }
-		/*
-		if (this._checkInitialDockStateId > 0) {
-            GLib.source_remove(this._checkInitialDockStateId);
-            this._checkInitialDockStateId = 0;
-        }
-		*/
+
     }
 
     _addSignals() {
@@ -123,12 +118,12 @@ var Hijacker = class HideDock_Hijacker {
     }
 
     _addDockSignals() {
-        this._signalsHandler.addWithLabel(DOCK_SIGNALS_LABEL,
-            [   // monitor windows overlapping
-                this._dock._intellihide,
-                'status-changed',
-                this._onWindowOverlapping.bind(this)
-            ], [
+        this._signalsHandler.addWithLabel(DOCK_SIGNALS_LABEL, [
+            // monitor windows overlapping
+            this._dock._intellihide,
+            'status-changed',
+            this._onWindowOverlapping.bind(this)
+        ], [
             // sync hover after a popupmenu is closed
             this._dock.dash,
             'menu-closed',
@@ -306,7 +301,7 @@ var Hijacker = class HideDock_Hijacker {
             // looks weird
             if (!this._oshow && !this._dhover &&
                 (this._oshowold || (this._woverlap && !this._dhover))) {
-	
+
                 this._oshowold = false;
                 this._woverlap = false;
 
@@ -515,14 +510,11 @@ var HijackerManager = class HideDock_HijackerManager {
 
         if (this._hijacker) {
             this._hijacker.destroy();
+            this._hijacker = null;
         }
 
-		/*
-		if (this._checkInitialDockStateId > 0) {
-            GLib.source_remove(this._checkInitialDockStateId);
-            this._checkInitialDockStateId = 0;
-        }
-		*/
+        // make sure to null out reference to extension's _hijackManager
+        Me.imports.extension._hijackerManager = null;
     }
 
     _LOG(msg, diag = false) {
