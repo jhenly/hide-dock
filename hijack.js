@@ -227,12 +227,19 @@ var Hijacker = class HideDock_Hijacker {
             if (this._checkInitialDockShownCount < INITIAL_DOCK_MAGIC_SHOWN) {
                 return true;
             } else {
+                // reset check initial dock counts for possible future checks
+                this._checkInitialDockShownCount = 0;
+                this._checkInitialDockStateCount = 0;
+
                 // dock has been hidden 3 times, end the timeout
                 return false;
             }
         }
 
-        /* at this point 'check' equals OVER_HOVER or MAX_CHECKS, end timout */
+        /* at this point 'check' equals OVER_HOVER or MAX_CHECKS, stop timing
+         * out and reset check initial dock counts for possible future checks */
+        this._checkInitialDockShownCount = 0;
+        this._checkInitialDockStateCount = 0;
         return false;
     }
 
