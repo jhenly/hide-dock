@@ -22,7 +22,10 @@ function _objKeysToString(name = "", obj) {
 const INITIAL_DOCK_STATE_TIMEOUT = 200;
 const MAX_INITIAL_DOCK_STATE_CHECKS = 10;
 const INITIAL_DOCK_MAGIC_SHOWN = 3;
+
+const DOCK_MANAGER_SIGNALS_LABEL = "dock-manager";
 const DOCK_SIGNALS_LABEL = "dock-signals";
+const GENERAL_SIGNALS_LABEL = "general";
 
 var InitialDockCheck = {
     SHOWING: 0, // the dock is showing
@@ -60,11 +63,10 @@ var Hijacker = class HideDock_Hijacker {
 
         //this.connect('destroy', this._onDestroy.bind(this));
 
-        this._signalsHandler = new Utils.HijackSignalsHandler(); //udock.imports.utils.GlobalSignalsHandler();
+        this._signalsHandler = new Utils.HijackSignalsHandler();
         this._addSignals();
 
         // variables used to try and hide initially shown dock
-        //this._checkInitialDockStateId = 0;
         this._checkInitialDockStateCount = 0;
         this._checkInitialDockShownCount = 0;
         this._stopCheckingInitialDock = false;
@@ -79,6 +81,9 @@ var Hijacker = class HideDock_Hijacker {
     }
 
     destroy() {
+        // notify if disabled while checking initial dock state
+        this._stopCheckingInitialDock = true;
+
         this._signalsHandler.destroy();
 
         if (this._dockHoverBoxId != 0) {
@@ -88,8 +93,20 @@ var Hijacker = class HideDock_Hijacker {
 
     }
 
+    destroyAfterDock() {
+        // notify if disabled while checking initial dock state
+        this._stopCheckingInitialDock = true;
+
+        this._signalsHandler.removeWithLabel(GENERAL_SIGNALS_LABEL);
+        this._signalsHandler = null;
+
+        this._allDocks = null;
+        this._dock = null;
+        this._dockHoverBox = null;
+    }
+
     _addSignals() {
-        this._signalsHandler.add([
+        this._signalsHandler.addWithLabel(GENERAL_SIGNALS_LABEL, [
             // update when workarea changes, for instance if  other extensions
             // modify the struts (like moving th panel at the bottom)
             global.display,
@@ -111,6 +128,10 @@ var Hijacker = class HideDock_Hijacker {
             Main.overview,
             'hiding',
             this._onOverviewHiding.bind(this)
+        ], [
+            global.workspace_manager,
+            'active-workspace-changed',
+            this._onActiveWorkspaceChanged.bind(this)
         ]);
 
         // add dock signals to signalsHandler
@@ -143,21 +164,26 @@ var Hijacker = class HideDock_Hijacker {
     }
 
     _prepForDockManagerToggle() {
-	    if(this._waitingForToggle)
+        if (this._waitingForToggle)
             return;
-        
+
         this._waitingForToggle = true;
         this._signalsHandler.removeWithLabel(DOCK_SIGNALS_LABEL);
 
         if (this._dockHoverBoxId != 0) {
-            if (this._dockHoverBox) {
-                this._LOG("  _dockHoverBox is not NULL");
-                this._dockHoverBox.disconnect(this._dockHoverBoxId);
-                this._dockHoverBox = null;
+            if (this._dockHoverBox === this._dockmgr._allDocks[0]._box) {
+                this._LOG("this._dockHoverBox equals old dock box")
+                if (this._dockHoverBox) {
+                    this._LOG("  _dockHoverBox is not NULL");
+                    this._dockHoverBox.disconnect(this._dockHoverBoxId);
+                    this._dockHoverBox = null;
+                } else {
+                    this._LOG("  _dockHoverBox IS NULL");
+                }
+                this._dockHoverBoxId = 0;
             } else {
-                this._LOG("  _dockHoverBox IS NULL");
+                this._LOG("this._dockHoverBox DOES NOT EQUAL old dock box");
             }
-            this._dockHoverBoxId = 0;
         }
 
     }
@@ -169,8 +195,8 @@ var Hijacker = class HideDock_Hijacker {
         this._addDockSignals();
 
         this._waitingForToggle = false;
-        
-        if(!this._stopCheckingInitialDock) {
+
+        if (!this._stopCheckingInitialDock) {
             Utils.asyncTimeoutPostCall(this._hideInitialDock.bind(this),
                 INITIAL_DOCK_STATE_TIMEOUT)
                 .then(res => this._LOG(`Successfully hid the dock.`));
@@ -178,12 +204,12 @@ var Hijacker = class HideDock_Hijacker {
     }
 
     _hideInitialDock() {
-	    // the only time the following happens is when this extension or udock
+        // the only time the following happens is when this extension or udock
         // is disabled while checking for intial dock state, we need to stop
         // making timeouts as soon as possible
-	    if(this._stopCheckingInitialDock)
+        if (this._stopCheckingInitialDock)
             return false;
-        
+
         // 
         let check = this._initialDockCheck();
 
@@ -206,7 +232,7 @@ var Hijacker = class HideDock_Hijacker {
             }
         }
 
-        // at this point 'check' equals OVER_HOVER or MAX_CHECKS, end timeout
+        /* at this point 'check' equals OVER_HOVER or MAX_CHECKS, end timout */
         return false;
     }
 
@@ -250,6 +276,10 @@ var Hijacker = class HideDock_Hijacker {
 
     _onPopupMenuClosed() {
         //LOG("Popup Menu Closed");
+    }
+
+    _onActiveWorkspaceChanged() {
+        this._LOG("Active Workspace Changed");
     }
 
     _onWindowOverlapping() {
@@ -340,11 +370,6 @@ var Hijacker = class HideDock_Hijacker {
         this._dock._animateOut(settings.get_double('animation-time'), 0);
     }
 
-	/*_onDestroy() {
-		this.destroy();
-	}
-	*/
-
     _LOG(msg, diag = false) {
         msg = " Hijacker: " + msg;
 
@@ -364,8 +389,6 @@ var Hijacker = class HideDock_Hijacker {
     }
 };
 
-const DOCK_MANAGER_SIGNALS_LABEL = "dock-manager";
-
 var HijackerManager = class HideDock_HijackerManager {
 
     constructor(udock) {
@@ -376,7 +399,8 @@ var HijackerManager = class HideDock_HijackerManager {
 
         this._udock = udock;
 
-        /*var State = {HIDDEN:0, SHOWING:1, SHOWN:2, HIDING:3};*/
+        /* from ubuntu dock's docking.js:
+         * var State = {HIDDEN:0, SHOWING:1, SHOWN:2, HIDING:3}; */
         State = udock.imports.docking.State;
 
         this._hijacker = new Hijacker(this._udock);
@@ -394,8 +418,47 @@ var HijackerManager = class HideDock_HijackerManager {
     }
 
     _addSettingsSignals() {
+        this._signalsHandler.addWithLabel(GENERAL_SIGNALS_LABEL, [
+            Meta.MonitorManager.get(),
+            'monitors-changed',
+            this._onMonitorsChanged.bind(this)
+        ], [
+            Main.sessionMode,
+            'updated',
+            this._onUpdated.bind(this)
+        ]);
+    }
+
+    _addDockManagerSignals() {
         let settings = this._dockmgr._settings;
-        this._signalsHandler.add([
+        this._signalsHandler.addWithLabel(DOCK_MANAGER_SIGNALS_LABEL, [
+            this._dockmgr,
+            'toggled',
+            () => {
+                this._LOG("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!toggled");
+                this._hijacker._onDockManagerToggle();
+            }
+        ], [
+            settings,
+            'changed::multi-monitor',
+            () => { this._LOG("changed::multi-monitor"); }
+        ], [
+            settings,
+            'changed::preferred-monitor',
+            () => { this._LOG("changed::preferred-monitor"); }
+        ], [
+            settings,
+            'changed::dock-position',
+            this._onDockPositionChanged.bind(this)
+        ], [
+            settings,
+            'changed::show-trash',
+            () => { this._LOG("changed::show-trash"); }
+        ], [
+            settings,
+            'changed::show-mounts',
+            () => { this._LOG("changed::show-mounts"); }
+        ], [
             settings,
             'changed::scroll-action',
             () => { this._LOG("changed::scroll-action"); }
@@ -459,45 +522,6 @@ var HijackerManager = class HideDock_HijackerManager {
             settings,
             'changed::pressure-threshold',
             () => { this._LOG("changed::pressure-threshold"); }
-        ], [
-            Meta.MonitorManager.get(),
-            'monitors-changed',
-            () => { this._LOG("monitors-changed"); }
-        ], [
-            Main.sessionMode,
-            'updated',
-            () => { this._LOG("updated"); }
-        ], [
-            settings,
-            'changed::multi-monitor',
-            () => { this._LOG("changed::multi-monitor"); }
-        ], [
-            settings,
-            'changed::preferred-monitor',
-            () => { this._LOG("changed::preferred-monitor"); }
-        ], [
-            settings,
-            'changed::dock-position',
-            this._onDockPositionChanged.bind(this)
-        ], [
-            settings,
-            'changed::show-trash',
-            () => { this._LOG("changed::show-trash"); }
-        ], [
-            settings,
-            'changed::show-mounts',
-            () => { this._LOG("changed::show-mounts"); }
-        ]);
-    }
-
-    _addDockManagerSignals() {
-        this._signalsHandler.addWithLabel(DOCK_MANAGER_SIGNALS_LABEL, [
-            this._dockmgr,
-            'toggled',
-            () => {
-                this._LOG("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!toggled");
-                this._hijacker._onDockManagerToggle();
-            }
         ]);
     }
 
@@ -509,6 +533,20 @@ var HijackerManager = class HideDock_HijackerManager {
         this._LOG("changed::dash-max-icon-size");
     }
 
+    _onUpdated() {
+        this._LOG("updated");
+        if (this._hijacker) {
+            this._hijacker._prepForDockManagerToggle();
+        }
+    }
+
+    _onMonitorsChanged() {
+        this._LOG("monitors-changed");
+        if (this._hijacker) {
+            this._hijacker._prepForDockManagerToggle();
+        }
+    }
+
     _onDockPositionChanged() {
         this._LOG("changed::dock-position");
 
@@ -518,13 +556,23 @@ var HijackerManager = class HideDock_HijackerManager {
     }
 
     destroy() {
-	    // notify if disabled while checking initial dock state
-        this._stopCheckingInitialDock = true;
-        
         this._signalsHandler.destroy();
 
         if (this._hijacker) {
             this._hijacker.destroy();
+            this._hijacker = null;
+        }
+
+        // make sure to null out reference to extension's _hijackManager
+        Me.imports.extension._hijackerManager = null;
+    }
+
+    destroyAfterDock() {
+        this._signalsHandler.removeWithLabel(GENERAL_SIGNALS_LABEL);
+        this._signalsHandler = null;
+
+        if (this._hijacker) {
+            this._hijacker.destroyAfterDock();
             this._hijacker = null;
         }
 
