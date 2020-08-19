@@ -5,57 +5,25 @@
  * Hide Dock v1.0
  * Jonathan Henly <JonathanHenly@gmail.com>
  * July 2020
- * 
- * ## Note:
- * It's actually possible to get the undecorate-on-maximise behaviour without
- * needing this extension. See the link [5] and in particular, the bit on editing
- * your metacity theme metacity-theme-3.xml. ("Method 2: editing the theme").
- *
  */
 
-// -*- mode: js; js-indent-level: 4; indent-tabs-mode: nil -*-
-
-const Clutter = imports.gi.Clutter;
-const GLib = imports.gi.GLib;
-const GObject = imports.gi.GObject;
-const Meta = imports.gi.Meta;
-const Shell = imports.gi.Shell;
-const St = imports.gi.St;
-const Params = imports.misc.params;
-
 const Main = imports.ui.main;
-const Dash = imports.ui.dash;
-const IconGrid = imports.ui.iconGrid;
-const Overview = imports.ui.overview;
-const OverviewControls = imports.ui.overviewControls;
-const PointerWatcher = imports.ui.pointerWatcher;
-const Signals = imports.signals;
-const ViewSelector = imports.ui.viewSelector;
-const WorkspaceSwitcherPopup = imports.ui.workspaceSwitcherPopup;
-const Layout = imports.ui.layout;
-const LayoutManager = imports.ui.main.layoutManager;
 
 const ExtensionUtils = imports.misc.extensionUtils;
-
 
 const Me = ExtensionUtils.getCurrentExtension();
 const Hijack = Me.imports.hijack;
 const Utils = Me.imports.utils;
 
-//const Poll = Me.imports.poll;
-
 
 const UBUNTU_DOCK_UUID = "ubuntu-dock@ubuntu.com"
 
 
-//const Decoration = Me.imports.decoration;
-//const Buttons = Me.imports.buttons;
-//const AppMenu = Me.imports.app_menu;
-
 function LOG(msg) {
-    if (!msg) {
-        log("");
-        return;
+    if (msg == null) {
+        msg = "null";
+    } else if (msg == undefined) {
+        msg = "undefined";
     }
 
     log(`[${Me.metadata.name} <${Utils.hmsTimestamp()}>]` + msg);
@@ -63,10 +31,6 @@ function LOG(msg) {
 
 function init(extensionMeta) {
     LOG("initializing");
-
-    //Buttons.init(extensionMeta);
-    //Decoration.init(extensionMeta);
-    //AppMenu.init(extensionMeta);
 }
 
 let _extensionlistenerId;
@@ -76,7 +40,7 @@ function enable() {
     LOG("enabling");
 
 
-    // listen to enabled extensions for Ubuntu Dock events
+    // listen to enabled extensions for ubuntu dock
     _extensionlistenerId = Main.extensionManager.connect('extension-state-changed',
         onExtensionStateChanged);
 }
@@ -98,6 +62,7 @@ function onExtensionStateChanged() {
 
         onUbuntuDockEnabled(udock);
     } else if (!ubuntuDockEnabled && _ubuntuDockEnabled) {
+        // ubuntu dock has been disabled
         _ubuntuDockEnabled = false;
         onUbuntuDockDisabled();
     }
@@ -108,9 +73,9 @@ var _hijackerManager;
 
 function onUbuntuDockEnabled(udock) {
     LOG("Ubuntu Dock ENABLED");
+
     if (udock) {
         _hijackerManager = new Hijack.HijackerManager(udock);
-
     } else {
         LOG("udock is null");
     }
@@ -118,8 +83,12 @@ function onUbuntuDockEnabled(udock) {
 
 function onUbuntuDockDisabled() {
     LOG("Ubuntu Dock DISABLED");
+
+    /* ubuntu dock has already cleaned up its objects that hijackerManager is
+     * listening to, thus only disconnect listeners from non ubuntu dock objects
+     * , via hijackerManager.destroyAfterDock() */
     if (_hijackerManager) {
-        _hijackerManager.destroy();
+        _hijackerManager.destroyAfterDock();
         _hijackerManager = null;
     }
 }
@@ -127,19 +96,22 @@ function onUbuntuDockDisabled() {
 function disable() {
     LOG("disabling");
 
-    if (_hijackerManager) {
-        _hijackerManager.destroy();
-        _hijackerManager = null;
+    /* only use hijackerManager's destroy method if this extension is disabled
+     * while ubuntu dock is enabled, otherwise disconnecting hijackerManager's
+     * ubuntu dock signals will cause errors */
+    if (_ubuntuDockEnabled) {
+        if (_hijackerManager) {
+            _hijackerManager.destroy();
+            _hijackerManager = null;
+        }
+
     }
 
+    // clean up extensionManager's extension-state-changed listener
     if (_extensionlistenerId) {
         Main.extensionManager.disconnect(_extensionlistenerId);
         _extensionlistenerId = 0;
     }
-
-    //AppMenu.disable();
-    //Decoration.disable();
-    //Buttons.disable();
 }
 
 function _objKeysToString(name = "", obj) {
