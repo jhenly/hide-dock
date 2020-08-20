@@ -395,7 +395,11 @@ var HijackerManager = class HideDock_HijackerManager {
 
         //this._hijacker = new Hijacker(this._udock);
         this._hijackers = [];
-        this._createHijackers();
+
+        // don't hide or listen to docks if fixed
+        if (!this._dockIsFixed()) {
+            this._createHijackers();
+        }
 
         this._signalsHandler = new Utils.HijackSignalsHandler();
         this._addGeneralSignals();
@@ -540,7 +544,15 @@ var HijackerManager = class HideDock_HijackerManager {
     }
 
     _onDockFixed() {
-        this._LOG("changed::dock-fixed");
+        const fixed = this._dockIsFixed();
+
+        if (fixed) {
+            this._deleteHijackers();
+        } else {
+            this._createHijackers();
+        }
+
+        this._LOG("changed::dock-fixed -> fixed = " + fixed);
     }
 
     _onIconSizeChange() {
@@ -564,6 +576,9 @@ var HijackerManager = class HideDock_HijackerManager {
     }
 
     _onDockManagerToggle() {
+        if (this._dockIsFixed())
+            return;
+
         this._LOG("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! toggled");
         this._createHijackers();
     }
@@ -580,17 +595,25 @@ var HijackerManager = class HideDock_HijackerManager {
         this._udock = null;
     }
 
+    _dockIsFixed() {
+        if (!this._dockmgr)
+            return true;
+
+        const settings = this._dockmgr._settings;
+        return settings.get_boolean('dock-fixed');
+    }
+
     destroy() {
         if (this._dockmgr) {
-	        this._deleteHijackers();
-            
+            this._deleteHijackers();
+
             this._signalsHandler.destroy();
             this._signalsHandler = null;
         } else if (this._signalsHandler) {
-	        this._signalsHandler.removeWithLabel(GENERAL_SIGNALS);
+            this._signalsHandler.removeWithLabel(GENERAL_SIGNALS);
             this._signalsHandler = null;
         }
-        
+
         this._udock = null;
         this._dockmgr = null;
 
@@ -601,11 +624,6 @@ var HijackerManager = class HideDock_HijackerManager {
     destroyAfterDock() {
         this._signalsHandler.removeWithLabel(GENERAL_SIGNALS);
         this._signalsHandler = null;
-
-        if (this._hijacker) {
-            this._hijacker.destroyAfterDock();
-            this._hijacker = null;
-        }
 
         // make sure to null out reference to extension's _hijackManager
         Me.imports.extension._hijackerManager = null;
