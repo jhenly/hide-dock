@@ -25,6 +25,7 @@ const INITIAL_DOCK_MAGIC_SHOWN = 3;
 
 const GENERAL_SIGNALS = "general";
 const DOCK_MANAGER_SIGNALS = "dock-manager";
+const UDOCK_SETTINGS_SIGNALS = "udock-settings";
 const DOCK_SIGNALS = "dock-signals";
 const DOCK_HOVER_BOX_SIGNALS = "dock-hover-box";
 
@@ -43,10 +44,8 @@ var State;
  */
 var Hijacker = class HideDock_Hijacker {
 
-    constructor(udock) {
-        this._dockmgr = udock.stateObj.dockManager;
-        this._allDocks = this._dockmgr._allDocks;
-        this._dock = this._allDocks[0];
+    constructor(dock) {
+        this._dock = dock;
 
         // overview showing
         this._oshow = false;
@@ -58,9 +57,9 @@ var Hijacker = class HideDock_Hijacker {
         this._dhover = false;
         // window overlapping dock
         this._woverlap = false;
+
         // 'this._dock._box' is used by DashToDock to monitor mouse hovering
         this._dockHoverBox = this._dock._box;
-        this._dockHoverBoxId = 0;
 
         // create signals handler and add signals
         this._signalsHandler = new Utils.HijackSignalsHandler();
@@ -72,19 +71,19 @@ var Hijacker = class HideDock_Hijacker {
         this._checkInitialDockShownCount = 0;
         this._stopCheckingInitialDock = false;
 
-        // waiting for dock manager to toggle after settings change
-        this._waitingForToggle = false;
-
         Utils.asyncTimeoutPostCall(this._hideInitialDock.bind(this),
             INITIAL_DOCK_STATE_TIMEOUT)
-            .then(res => his._LOG("Successfully hid the dock."));
+            .then(res => this._LOG("Successfully hid the dock."));
     }
 
     destroy() {
         // notify if disabled while checking initial dock state
         this._stopCheckingInitialDock = true;
-        this._signalsHandler.destroy();
 
+        this._signalsHandler.destroy();
+        this._signalsHandler = null;
+
+        this._dockHoverBox = null;
         this._dock = null;
     }
 
@@ -95,7 +94,6 @@ var Hijacker = class HideDock_Hijacker {
         this._signalsHandler.removeWithLabel(GENERAL_SIGNALS);
         this._signalsHandler = null;
 
-        this._allDocks = null;
         this._dock = null;
         this._dockHoverBox = null;
     }
@@ -185,46 +183,10 @@ var Hijacker = class HideDock_Hijacker {
     // might not need this method
     _onDestroyDockHoverBox() {
         this._LOG("  _onDockHoverBoxDestroy WAS CALLED !!!! !!!!");
-    }
 
-    _prepForDockManagerToggle() {
-        if (this._waitingForToggle)
-            return;
-
-        this._waitingForToggle = true;
-        this._signalsHandler.removeWithLabel(DOCK_SIGNALS);
-
-        if (this._dockHoverBoxId != 0) {
-            if (this._dockHoverBox === this._dockmgr._allDocks[0]._box) {
-                this._LOG("this._dockHoverBox equals old dock box")
-                if (this._dockHoverBox) {
-                    this._LOG("  _dockHoverBox is not NULL");
-                    this._dockHoverBox.disconnect(this._dockHoverBoxId);
-                    //this._dockHoverBox = null;
-                    this._LOG("  ABOUT TO FIRE onDockHoverBoxDestroy !!!!");
-                } else {
-                    this._LOG("  _dockHoverBox IS NULL");
-                }
-                this._dockHoverBoxId = 0;
-            } else {
-                this._LOG("this._dockHoverBox DOES NOT EQUAL old dock box");
-            }
-        }
-
-    }
-
-    _onDockManagerToggle(newDock) {
-        this._dock = this._dockmgr._allDocks[0];
-        this._dockHoverBox = this._dock._box;
-
-        this._addDockSignals();
-
-        this._waitingForToggle = false;
-
-        if (!this._stopCheckingInitialDock) {
-            Utils.asyncTimeoutPostCall(this._hideInitialDock.bind(this),
-                INITIAL_DOCK_STATE_TIMEOUT)
-                .then(res => this._LOG("Successfully hid the dock."));
+        if (this._dockHoverBox) {
+            this._signalsHandler.removeWithLabel(DOCK_HOVER_BOX_SIGNALS);
+            this._dockHoverBox = null;
         }
     }
 
@@ -356,19 +318,15 @@ var Hijacker = class HideDock_Hijacker {
     }
 
     onDockHoverChanged() {
-        this._dhover = this._dock._box.hover;
+        this._dhover = this._dockHoverBox.hover;
         this._updateDockVisibility();
         this._LOG("Hover Changed")
     }
 
     _updateDockVisibility() {
-        // don't update dock visibility while waiting for Dock Manager toggle
-        if (this._waitingForToggle)
-            return;
-
-        let dstate = this._dock.getDockState();
-        let dockShowing = dstate == State.SHOWN || dstate == State.SHOWING;
-        let oshowOrHover = this._oshow || this._dhover;
+        const dstate = this._dock.getDockState();
+        const dockShowing = dstate == State.SHOWN || dstate == State.SHOWING;
+        const oshowOrHover = this._oshow || this._dhover;
 
         if (dockShowing) {
             // don't hide dock when overview showing or mouse hovering
@@ -397,11 +355,10 @@ var Hijacker = class HideDock_Hijacker {
 
     _hideDockNoDelay() {
         this._LOG("  !_hideDockNoDelay!");
-        let settings = this._dockmgr._settings;
-        let atime = settings.get_double('animation-time');
+        const animationTime = 0; // settings value = 0.2
+        const delay = 0;
 
-        this._LOG("!!!!  animation-time = " + atime + " !!!!");
-        this._dock._animateOut(settings.get_double('animation-time'), 0);
+        this._dock._animateOut(animationTime, delay);
     }
 
     _LOG(msg, diag = false) {
@@ -418,8 +375,7 @@ var Hijacker = class HideDock_Hijacker {
     }
 
     _stateToString(state) {
-        let states = ["HIDDEN", "SHOWING", "SHOWN", "HIDING"];
-        return states[state];
+        return ["HIDDEN", "SHOWING", "SHOWN", "HIDING"][state];
     }
 };
 
@@ -431,26 +387,45 @@ var HijackerManager = class HideDock_HijackerManager {
 
         Me.imports.extension._hijackerManager = this;
 
-        this._udock = udock;
-
         /* from ubuntu dock's docking.js:
          * var State = {HIDDEN:0, SHOWING:1, SHOWN:2, HIDING:3}; */
         State = udock.imports.docking.State;
 
-        this._dockmgr = this._udock.stateObj.dockManager;
+        this._dockmgr = udock.stateObj.dockManager;
 
-        this._hijacker = new Hijacker(this._udock);
+        //this._hijacker = new Hijacker(this._udock);
+        this._hijackers = [];
+        this._createHijackers();
 
         this._signalsHandler = new Utils.HijackSignalsHandler();
-        this._addSettingsSignals();
+        this._addGeneralSignals();
         this._addDockManagerSignals();
+        this._addSettingsSignals();
     }
 
     static getDefault() {
         return Me.imports.extension._hijackerManager;
     }
 
-    _addSettingsSignals() {
+    _createHijackers() {
+        if (this._hijackers.length)
+            return;
+
+        const allDocks = this._dockmgr._allDocks;
+
+        allDocks.forEach((dock) => this._hijackers.push(new Hijacker(dock)));
+    }
+
+    _deleteHijackers() {
+        if (!this._hijackers.length)
+            return;
+
+        // delete all hijackers
+        this._hijackers.forEach(h => h.destroy());
+        this._hijackers = [];
+    }
+
+    _addGeneralSignals() {
         this._signalsHandler.addWithLabel(GENERAL_SIGNALS, [
             Meta.MonitorManager.get(),
             'monitors-changed',
@@ -463,15 +438,21 @@ var HijackerManager = class HideDock_HijackerManager {
     }
 
     _addDockManagerSignals() {
-        let settings = this._dockmgr._settings;
         this._signalsHandler.addWithLabel(DOCK_MANAGER_SIGNALS, [
             this._dockmgr,
             'toggled',
-            () => {
-                this._LOG("!!!!!!!!!!!!!!!!!!!!!!!!!!!!toggled");
-                this._hijacker._onDockManagerToggle();
-            }
+            this._onDockManagerToggle.bind(this)
         ], [
+            this._dockmgr,
+            'destroy',
+            this._onDestroyDockManager.bind(this)
+        ]);
+    }
+
+    _addSettingsSignals() {
+        const settings = this._dockmgr._settings;
+
+        this._signalsHandler.addWithLabel(UDOCK_SETTINGS_SIGNALS, [
             settings,
             'changed::multi-monitor',
             () => { this._LOG("changed::multi-monitor"); }
@@ -567,31 +548,49 @@ var HijackerManager = class HideDock_HijackerManager {
     }
 
     _onUpdated() {
-        this._LOG("updated");
-        if (this._hijacker) {
-            this._hijacker._prepForDockManagerToggle();
-        }
+        this._LOG("updated - deleting hijackers");
+        this._deleteHijackers();
     }
 
     _onMonitorsChanged() {
-        this._LOG("monitors-changed");
-        if (this._hijacker) {
-            this._hijacker._prepForDockManagerToggle();
-        }
+        this._LOG("monitors-changed - deleting hijackers");
+        this._deleteHijackers();
     }
 
     _onDockPositionChanged() {
-        this._LOG("changed::dock-position");
+        this._LOG("changed::dock-position - deleting hijackers");
 
-        if (this._hijacker) {
-            this._hijacker._prepForDockManagerToggle();
-        }
+        this._deleteHijackers();
     }
 
-    destroy() {
+    _onDockManagerToggle() {
+        this._LOG("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! toggled");
+        this._createHijackers();
+    }
+
+    _onDestroyDockManager() {
+        this._LOG("  -|-|-|-  DOCK MANAGER is being destroyed");
+        this._deleteHijackers();
+
         this._signalsHandler.destroy();
         this._signalsHandler = null;
 
+        // null out dockmgr to flag it was destroyed
+        this._dockmgr = null;
+        this._udock = null;
+    }
+
+    destroy() {
+        if (this._dockmgr) {
+	        this._deleteHijackers();
+            
+            this._signalsHandler.destroy();
+            this._signalsHandler = null;
+        } else if (this._signalsHandler) {
+	        this._signalsHandler.removeWithLabel(GENERAL_SIGNALS);
+            this._signalsHandler = null;
+        }
+        
         this._udock = null;
         this._dockmgr = null;
 
