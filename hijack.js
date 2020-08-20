@@ -23,9 +23,10 @@ const INITIAL_DOCK_STATE_TIMEOUT = 200;
 const MAX_INITIAL_DOCK_STATE_CHECKS = 10;
 const INITIAL_DOCK_MAGIC_SHOWN = 3;
 
-const DOCK_MANAGER_SIGNALS_LABEL = "dock-manager";
-const DOCK_SIGNALS_LABEL = "dock-signals";
-const GENERAL_SIGNALS_LABEL = "general";
+const GENERAL_SIGNALS = "general";
+const DOCK_MANAGER_SIGNALS = "dock-manager";
+const DOCK_SIGNALS = "dock-signals";
+const DOCK_HOVER_BOX_SIGNALS = "dock-hover-box";
 
 var InitialDockCheck = {
     SHOWING: 0, // the dock is showing
@@ -61,43 +62,37 @@ var Hijacker = class HideDock_Hijacker {
         this._dockHoverBox = this._dock._box;
         this._dockHoverBoxId = 0;
 
-        //this.connect('destroy', this._onDestroy.bind(this));
-
+        // create signals handler and add signals
         this._signalsHandler = new Utils.HijackSignalsHandler();
-        this._addSignals();
+        this._addGeneralSignals();
+        this._addDockSignals();
 
         // variables used to try and hide initially shown dock
         this._checkInitialDockStateCount = 0;
         this._checkInitialDockShownCount = 0;
         this._stopCheckingInitialDock = false;
 
+        // waiting for dock manager to toggle after settings change
         this._waitingForToggle = false;
 
         Utils.asyncTimeoutPostCall(this._hideInitialDock.bind(this),
             INITIAL_DOCK_STATE_TIMEOUT)
-            .then(res => this._LOG(`Successfully hid the dock.`));
-
-        //this._hideInitialDock();
+            .then(res => his._LOG("Successfully hid the dock."));
     }
 
     destroy() {
         // notify if disabled while checking initial dock state
         this._stopCheckingInitialDock = true;
-
         this._signalsHandler.destroy();
 
-        if (this._dockHoverBoxId != 0) {
-            this._dockHoverBox.disconnect(this._dockHoverBoxId);
-            this._dockHoverBox = null;
-        }
-
+        this._dock = null;
     }
 
     destroyAfterDock() {
         // notify if disabled while checking initial dock state
         this._stopCheckingInitialDock = true;
 
-        this._signalsHandler.removeWithLabel(GENERAL_SIGNALS_LABEL);
+        this._signalsHandler.removeWithLabel(GENERAL_SIGNALS);
         this._signalsHandler = null;
 
         this._allDocks = null;
@@ -105,8 +100,8 @@ var Hijacker = class HideDock_Hijacker {
         this._dockHoverBox = null;
     }
 
-    _addSignals() {
-        this._signalsHandler.addWithLabel(GENERAL_SIGNALS_LABEL, [
+    _addGeneralSignals() {
+        this._signalsHandler.addWithLabel(GENERAL_SIGNALS, [
             // update when workarea changes, for instance if  other extensions
             // modify the struts (like moving th panel at the bottom)
             global.display,
@@ -134,12 +129,10 @@ var Hijacker = class HideDock_Hijacker {
             this._onActiveWorkspaceChanged.bind(this)
         ]);
 
-        // add dock signals to signalsHandler
-        this._addDockSignals();
     }
 
     _addDockSignals() {
-        this._signalsHandler.addWithLabel(DOCK_SIGNALS_LABEL, [
+        this._signalsHandler.addWithLabel(DOCK_SIGNALS, [
             // monitor windows overlapping
             this._dock._intellihide,
             'status-changed',
@@ -157,10 +150,41 @@ var Hijacker = class HideDock_Hijacker {
             this._dock,
             'hiding',
             this._onDockHiding.bind(this)
+        ], [
+            this._dock,
+            'destroy',
+            this._onDestroyDock.bind(this)
         ]);
 
-        this._dockHoverBoxId = this._dockHoverBox.connect('notify::hover',
-            this._dockHoverChanged.bind(this));
+        this._signalsHandler.addWithLabel(DOCK_HOVER_BOX_SIGNALS, [
+            this._dockHoverBox,
+            'notify::hover',
+            this.onDockHoverChanged.bind(this)
+        ], [
+            this._dockHoverBox,
+            'destroy', // might not need this signal
+            this._onDestroyDockHoverBox.bind(this)
+        ]);
+
+    }
+
+    _onDestroyDock() {
+        this._LOG("  onDestroyDock WAS CALLED !!!! !!!!");
+
+        if (this._dockHoverBox) {
+            this._signalsHandler.removeWithLabel(DOCK_HOVER_BOX_SIGNALS);
+            this._dockHoverBox = null;
+        }
+
+        if (this._dock) {
+            this._signalsHandler.removeWithLabel(DOCK_SIGNALS);
+            this._dock = null;
+        }
+    }
+
+    // might not need this method
+    _onDestroyDockHoverBox() {
+        this._LOG("  _onDockHoverBoxDestroy WAS CALLED !!!! !!!!");
     }
 
     _prepForDockManagerToggle() {
@@ -168,7 +192,7 @@ var Hijacker = class HideDock_Hijacker {
             return;
 
         this._waitingForToggle = true;
-        this._signalsHandler.removeWithLabel(DOCK_SIGNALS_LABEL);
+        this._signalsHandler.removeWithLabel(DOCK_SIGNALS);
 
         if (this._dockHoverBoxId != 0) {
             if (this._dockHoverBox === this._dockmgr._allDocks[0]._box) {
@@ -176,7 +200,8 @@ var Hijacker = class HideDock_Hijacker {
                 if (this._dockHoverBox) {
                     this._LOG("  _dockHoverBox is not NULL");
                     this._dockHoverBox.disconnect(this._dockHoverBoxId);
-                    this._dockHoverBox = null;
+                    //this._dockHoverBox = null;
+                    this._LOG("  ABOUT TO FIRE onDockHoverBoxDestroy !!!!");
                 } else {
                     this._LOG("  _dockHoverBox IS NULL");
                 }
@@ -188,7 +213,7 @@ var Hijacker = class HideDock_Hijacker {
 
     }
 
-    _onDockManagerToggle() {
+    _onDockManagerToggle(newDock) {
         this._dock = this._dockmgr._allDocks[0];
         this._dockHoverBox = this._dock._box;
 
@@ -199,7 +224,7 @@ var Hijacker = class HideDock_Hijacker {
         if (!this._stopCheckingInitialDock) {
             Utils.asyncTimeoutPostCall(this._hideInitialDock.bind(this),
                 INITIAL_DOCK_STATE_TIMEOUT)
-                .then(res => this._LOG(`Successfully hid the dock.`));
+                .then(res => this._LOG("Successfully hid the dock."));
         }
     }
 
@@ -250,11 +275,14 @@ var Hijacker = class HideDock_Hijacker {
         this._checkInitialDockStateCount += 1;
 
         let dstate = this._dock.getDockState();
-        if (dstate == State.HIDING || dstate == State.HIDDEN) {
+        let dockHidden = dstate == State.HIDING || dstate == State.HIDDEN;
+        let oshowOrHover = this._oshow || this._dhover;
+
+        if (dockHidden) {
             // keep trying until dock state is SHOWN or SHOWING
             return InitialDockCheck.RETRY;
-        } else if (dstate == State.SHOWING || dstate == State.SHOWN) {
-            if (this._oshow || this._dhover) {
+        } else if (!dockHidden) { //i.e. dstate == SHOWN || SHOWING
+            if (oshowOrHover) {
                 // overview showing or mouse hovering, signal not to hide dock
                 return InitialDockCheck.OVER_HOVER;
             } else {
@@ -267,14 +295,12 @@ var Hijacker = class HideDock_Hijacker {
         return InitialDockCheck.RETRY;
     }
 
-
-
     _onWorkareasChanged() {
         //LOG("Workareas Changed");
     }
 
     _onInFullscreenChanged() {
-        //LOG("In Fullscreen Changed");
+        LOG("In Fullscreen Changed");
     }
 
     _onRestacked() {
@@ -293,15 +319,16 @@ var Hijacker = class HideDock_Hijacker {
         this._woverlap = true;
         this._updateDockVisibility();
 
-        this._LOG("Window Overlapping");
+        this._LOG("Window Overlapping", true);
     }
 
     _onOverviewShowing() {
         this._oshow = true;
         this._oshowold = true;
-        this._updateDockVisibility();
 
-        this._LOG("Overview Showing");
+        this._LOG("Overview Showing", true);
+
+        this._updateDockVisibility();
     }
 
     _onOverviewHiding() {
@@ -313,7 +340,7 @@ var Hijacker = class HideDock_Hijacker {
             this._woverlap = false;
         }
 
-        this._LOG("Overview Hiding");
+        this._LOG("Overview Hiding", true);
     }
 
     _onDockShowing() {
@@ -328,8 +355,8 @@ var Hijacker = class HideDock_Hijacker {
         this._LOG("Dock Hiding");
     }
 
-    _dockHoverChanged() {
-        this._dhover = this._dockHoverBox.hover;
+    onDockHoverChanged() {
+        this._dhover = this._dock._box.hover;
         this._updateDockVisibility();
         this._LOG("Hover Changed")
     }
@@ -340,31 +367,28 @@ var Hijacker = class HideDock_Hijacker {
             return;
 
         let dstate = this._dock.getDockState();
+        let dockShowing = dstate == State.SHOWN || dstate == State.SHOWING;
+        let oshowOrHover = this._oshow || this._dhover;
 
-        if (dstate == State.SHOWN || dstate == State.SHOWING) {
+        if (dockShowing) {
             // don't hide dock when overview showing or mouse hovering
-            if (this._oshow || this._dhover)
+            if (oshowOrHover)
                 return;
 
             // hide dock without delay when leaving overview, otherwise it
             // looks weird
-            if (!this._oshow && !this._dhover &&
-                (this._oshowold || (this._woverlap && !this._dhover))) {
-
+            if (this._oshowold || (this._woverlap && !this._dhover)) {
                 this._oshowold = false;
                 this._woverlap = false;
 
-                // use _hideDockNoDelay, _hide has an implicit delay
+                // use _hideDockNoDelay, this._dock._hide has an implicit delay
                 this._hideDockNoDelay();
-                return;
-            }
-
-            if (!this._dhover) {
+            } else if (!this._dhover) {
                 this._dock._hide();
             }
-        } else if (dstate == State.HIDDEN || dstate == State.HIDING) {
+        } else if (!dockShowing) { // i.e. dstate == HIDDEN || HIDING
             // show dock when overview is showing or when mouse is hovering
-            if (this._oshow || this._dhover) {
+            if (oshowOrHover) {
                 this._dock._show();
             }
         }
@@ -374,6 +398,9 @@ var Hijacker = class HideDock_Hijacker {
     _hideDockNoDelay() {
         this._LOG("  !_hideDockNoDelay!");
         let settings = this._dockmgr._settings;
+        let atime = settings.get_double('animation-time');
+
+        this._LOG("!!!!  animation-time = " + atime + " !!!!");
         this._dock._animateOut(settings.get_double('animation-time'), 0);
     }
 
@@ -410,13 +437,12 @@ var HijackerManager = class HideDock_HijackerManager {
          * var State = {HIDDEN:0, SHOWING:1, SHOWN:2, HIDING:3}; */
         State = udock.imports.docking.State;
 
-        this._hijacker = new Hijacker(this._udock);
-
         this._dockmgr = this._udock.stateObj.dockManager;
+
+        this._hijacker = new Hijacker(this._udock);
 
         this._signalsHandler = new Utils.HijackSignalsHandler();
         this._addSettingsSignals();
-
         this._addDockManagerSignals();
     }
 
@@ -425,7 +451,7 @@ var HijackerManager = class HideDock_HijackerManager {
     }
 
     _addSettingsSignals() {
-        this._signalsHandler.addWithLabel(GENERAL_SIGNALS_LABEL, [
+        this._signalsHandler.addWithLabel(GENERAL_SIGNALS, [
             Meta.MonitorManager.get(),
             'monitors-changed',
             this._onMonitorsChanged.bind(this)
@@ -438,11 +464,11 @@ var HijackerManager = class HideDock_HijackerManager {
 
     _addDockManagerSignals() {
         let settings = this._dockmgr._settings;
-        this._signalsHandler.addWithLabel(DOCK_MANAGER_SIGNALS_LABEL, [
+        this._signalsHandler.addWithLabel(DOCK_MANAGER_SIGNALS, [
             this._dockmgr,
             'toggled',
             () => {
-                this._LOG("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!toggled");
+                this._LOG("!!!!!!!!!!!!!!!!!!!!!!!!!!!!toggled");
                 this._hijacker._onDockManagerToggle();
             }
         ], [
@@ -564,18 +590,17 @@ var HijackerManager = class HideDock_HijackerManager {
 
     destroy() {
         this._signalsHandler.destroy();
+        this._signalsHandler = null;
 
-        if (this._hijacker) {
-            this._hijacker.destroy();
-            this._hijacker = null;
-        }
+        this._udock = null;
+        this._dockmgr = null;
 
         // make sure to null out reference to extension's _hijackManager
         Me.imports.extension._hijackerManager = null;
     }
 
     destroyAfterDock() {
-        this._signalsHandler.removeWithLabel(GENERAL_SIGNALS_LABEL);
+        this._signalsHandler.removeWithLabel(GENERAL_SIGNALS);
         this._signalsHandler = null;
 
         if (this._hijacker) {
