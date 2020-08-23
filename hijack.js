@@ -100,19 +100,9 @@ var Hijacker = class HideDock_Hijacker {
 
     _addGeneralSignals() {
         this._signalsHandler.addWithLabel(GENERAL_SIGNALS, [
-            // update when workarea changes, for instance if  other extensions
-            // modify the struts (like moving th panel at the bottom)
-            global.display,
-            'workareas-changed',
-            this._onWorkareasChanged.bind(this)
-        ], [
             global.display,
             'in-fullscreen-changed',
             this._onInFullscreenChanged.bind(this)
-        ], [
-            global.display,
-            'restacked',
-            this._onRestacked.bind(this)
         ], [
             Main.overview,
             'showing',
@@ -135,11 +125,6 @@ var Hijacker = class HideDock_Hijacker {
             this._dock._intellihide,
             'status-changed',
             this._onWindowOverlapping.bind(this)
-        ], [
-            // sync hover after a popupmenu is closed
-            this._dock.dash,
-            'menu-closed',
-            this._onPopupMenuClosed.bind(this)
         ], [
             this._dock,
             'showing',
@@ -256,21 +241,9 @@ var Hijacker = class HideDock_Hijacker {
 
         return InitialDockCheck.RETRY;
     }
-
-    _onWorkareasChanged() {
-        //LOG("Workareas Changed");
-    }
-
+    
     _onInFullscreenChanged() {
-        LOG("In Fullscreen Changed");
-    }
-
-    _onRestacked() {
-        //LOG("Window Restack or Workspace Change");
-    }
-
-    _onPopupMenuClosed() {
-        //LOG("Popup Menu Closed");
+        this._LOG("In Fullscreen Changed");
     }
 
     _onActiveWorkspaceChanged() {
