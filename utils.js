@@ -3,6 +3,8 @@
 const GLib = imports.gi.GLib;
 
 const Me = imports.misc.extensionUtils.getCurrentExtension();
+const Extension = Me.imports.extension;
+
 
 // extends GlobalSignalsHandler class
 var HijackSignalsHandler;
@@ -22,7 +24,6 @@ function onUbuntuDockEnabled(udock) {
         _remove(item) {
             if (!item[0] || !item[1])
                 return;
-
             item[0].disconnect(item[1]);
         }
     };
