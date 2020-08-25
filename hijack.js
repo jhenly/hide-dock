@@ -53,13 +53,13 @@ var Hijacker = class HideDock_Hijacker {
         this._oshowold = false;
         // dock showing
         this._dshow = false;
-        // mouse hovering dock
-        this._dhover = false;
         // window overlapping dock
         this._woverlap = false;
 
         // 'this._dock._box' is used by DashToDock to monitor mouse hovering
         this._dockHoverBox = this._dock._box;
+        // mouse hovering dock
+        this._dhover = this._dockHoverBox.hover;
 
         // create signals handler and add signals
         this._signalsHandler = new Utils.HijackSignalsHandler();
@@ -241,7 +241,7 @@ var Hijacker = class HideDock_Hijacker {
 
         return InitialDockCheck.RETRY;
     }
-    
+
     _onInFullscreenChanged() {
         this._LOG("In Fullscreen Changed");
     }
@@ -251,10 +251,14 @@ var Hijacker = class HideDock_Hijacker {
     }
 
     _onWindowOverlapping() {
-        this._woverlap = true;
-        this._updateDockVisibility();
-
-        this._LOG("Window Overlapping", true);
+        const overlap = this._dock._intellihide.getOverlapStatus();
+        
+        // the following code only runs when the dock goes from a state of being
+        // overlapped by a window to no longer being overlapped
+        if (!overlap) {
+            this._woverlap = true;
+            this._updateDockVisibility();
+        }
     }
 
     _onOverviewShowing() {
@@ -292,8 +296,9 @@ var Hijacker = class HideDock_Hijacker {
 
     onDockHoverChanged() {
         this._dhover = this._dockHoverBox.hover;
-        this._updateDockVisibility();
         this._LOG("Hover Changed")
+
+        this._updateDockVisibility();
     }
 
     _updateDockVisibility() {
@@ -308,13 +313,15 @@ var Hijacker = class HideDock_Hijacker {
 
             // hide dock without delay when leaving overview, otherwise it
             // looks weird
-            if (this._oshowold || (this._woverlap && !this._dhover)) {
+            if (this._oshowold || this._woverlap) {
                 this._oshowold = false;
                 this._woverlap = false;
 
                 // use _hideDockNoDelay, this._dock._hide has an implicit delay
                 this._hideDockNoDelay();
+                this._LOG("this._hideDockNoDelay() was called");
             } else if (!this._dhover) {
+                this._LOG("this._dock.hide() was called");
                 this._dock._hide();
             }
         } else if (!dockShowing) { // i.e. dstate == HIDDEN || HIDING
@@ -328,7 +335,7 @@ var Hijacker = class HideDock_Hijacker {
 
     _hideDockNoDelay() {
         this._LOG("  !_hideDockNoDelay!");
-        const animationTime = 0; // settings value = 0.2
+        const animationTime = 0.2; // settings value = 0.2
         const delay = 0;
 
         this._dock._animateOut(animationTime, delay);
