@@ -24,6 +24,7 @@ function onUbuntuDockEnabled(udock) {
         _remove(item) {
             if (!item[0] || !item[1])
                 return;
+            
             item[0].disconnect(item[1]);
         }
     };
