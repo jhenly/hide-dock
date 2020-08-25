@@ -100,10 +100,6 @@ var Hijacker = class HideDock_Hijacker {
 
     _addGeneralSignals() {
         this._signalsHandler.addWithLabel(GENERAL_SIGNALS, [
-            global.display,
-            'in-fullscreen-changed',
-            this._onInFullscreenChanged.bind(this)
-        ], [
             Main.overview,
             'showing',
             this._onOverviewShowing.bind(this)
@@ -111,12 +107,7 @@ var Hijacker = class HideDock_Hijacker {
             Main.overview,
             'hiding',
             this._onOverviewHiding.bind(this)
-        ], [
-            global.workspace_manager,
-            'active-workspace-changed',
-            this._onActiveWorkspaceChanged.bind(this)
         ]);
-
     }
 
     _addDockSignals() {
@@ -127,14 +118,6 @@ var Hijacker = class HideDock_Hijacker {
             this._onWindowOverlapping.bind(this)
         ], [
             this._dock,
-            'showing',
-            this._onDockShowing.bind(this)
-        ], [
-            this._dock,
-            'hiding',
-            this._onDockHiding.bind(this)
-        ], [
-            this._dock,
             'destroy',
             this._onDestroyDock.bind(this)
         ]);
@@ -142,13 +125,12 @@ var Hijacker = class HideDock_Hijacker {
         this._signalsHandler.addWithLabel(DOCK_HOVER_BOX_SIGNALS, [
             this._dockHoverBox,
             'notify::hover',
-            this.onDockHoverChanged.bind(this)
+            this._onDockHoverChanged.bind(this)
         ], [
             this._dockHoverBox,
             'destroy', // might not need this signal
             this._onDestroyDockHoverBox.bind(this)
         ]);
-
     }
 
     _onDestroyDock() {
@@ -242,17 +224,9 @@ var Hijacker = class HideDock_Hijacker {
         return InitialDockCheck.RETRY;
     }
 
-    _onInFullscreenChanged() {
-        this._LOG("In Fullscreen Changed");
-    }
-
-    _onActiveWorkspaceChanged() {
-        this._LOG("Active Workspace Changed");
-    }
-
     _onWindowOverlapping() {
         const overlap = this._dock._intellihide.getOverlapStatus();
-        
+
         // the following code only runs when the dock goes from a state of being
         // overlapped by a window to no longer being overlapped
         if (!overlap) {
@@ -282,19 +256,7 @@ var Hijacker = class HideDock_Hijacker {
         this._LOG("Overview Hiding", true);
     }
 
-    _onDockShowing() {
-        this._dshow = true;
-
-        this._LOG("Dock Showing");
-    }
-
-    _onDockHiding() {
-        this._dshow = false;
-
-        this._LOG("Dock Hiding");
-    }
-
-    onDockHoverChanged() {
+    _onDockHoverChanged() {
         this._dhover = this._dockHoverBox.hover;
         this._LOG("Hover Changed")
 
